@@ -1,9 +1,1 @@
 *.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-weather_loc_service
-*.test
-*.out
-.env
