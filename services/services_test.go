@@ -1,22 +1,25 @@
-package main
+package services
 
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"weather_loc_service/logger"
+	"weather_loc_service/models"
 )
 
 func TestGetWeather_Service(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := OpenMeteoResponse{
+		resp := models.OpenMeteoResponse{
 			Latitude: 52.52, Longitude: 13.41, Timezone: "Europe/Berlin", Elevation: 38,
-			Current: CurrentWeather{
+			Current: models.CurrentWeather{
 				Temperature2m: 20.5, RelativeHumidity2m: 65, ApparentTemperature: 19.8,
 				WeatherCode: 3, WindSpeed10m: 12.4, CloudCover: 45, Precipitation: 0,
 			},
-			Daily: DailyWeather{
+			Daily: models.DailyWeather{
 				Time:             []string{"2026-06-26"},
 				Temperature2mMax: []float64{22.1},
 				Temperature2mMin: []float64{14.2},
@@ -27,8 +30,8 @@ func TestGetWeather_Service(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	svc := newWeatherService(ts.URL, nil)
-	data, err := svc.getWeather(52.52, 13.41)
+	svc := NewWeatherService(ts.URL, nil)
+	data, err := svc.GetWeather(52.52, 13.41)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -44,23 +47,23 @@ func TestGetWeather_Service(t *testing.T) {
 }
 
 func TestGetWeather_ServerError(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 	}))
 	defer ts.Close()
 
-	svc := newWeatherService(ts.URL, nil)
-	_, err := svc.getWeather(52.52, 13.41)
+	svc := NewWeatherService(ts.URL, nil)
+	_, err := svc.GetWeather(52.52, 13.41)
 	if err == nil {
 		t.Error("expected error for 500, got nil")
 	}
 }
 
 func TestSearchLocation_Service(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := []NominatimResult{
+		resp := []models.NominatimResult{
 			{
 				PlaceID: 12345, Lat: "48.8583", Lon: "2.2945",
 				DisplayName: "Eiffel Tower, Paris, France",
@@ -72,8 +75,8 @@ func TestSearchLocation_Service(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	svc := newLocationService(ts.URL, nil)
-	results, err := svc.searchLocation("Eiffel Tower")
+	svc := NewLocationService(ts.URL, nil)
+	results, err := svc.SearchLocation("Eiffel Tower")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -86,23 +89,23 @@ func TestSearchLocation_Service(t *testing.T) {
 }
 
 func TestSearchLocation_ServerError(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 	}))
 	defer ts.Close()
 
-	svc := newLocationService(ts.URL, nil)
-	_, err := svc.searchLocation("Paris")
+	svc := NewLocationService(ts.URL, nil)
+	_, err := svc.SearchLocation("Paris")
 	if err == nil {
 		t.Error("expected error for 500, got nil")
 	}
 }
 
 func TestReverseGeocode_Service(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := NominatimResult{
+		resp := models.NominatimResult{
 			PlaceID: 67890, Lat: "28.6139", Lon: "77.2090",
 			DisplayName: "New Delhi, Delhi, India",
 			Class: "place", Type: "city", Importance: 0.8,
@@ -112,8 +115,8 @@ func TestReverseGeocode_Service(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	svc := newLocationService(ts.URL, nil)
-	data, err := svc.reverseGeocode(28.6139, 77.2090)
+	svc := NewLocationService(ts.URL, nil)
+	data, err := svc.ReverseGeocode(28.6139, 77.2090)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -123,43 +126,15 @@ func TestReverseGeocode_Service(t *testing.T) {
 }
 
 func TestReverseGeocode_ServerError(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 	}))
 	defer ts.Close()
 
-	svc := newLocationService(ts.URL, nil)
-	_, err := svc.reverseGeocode(28.6139, 77.2090)
+	svc := NewLocationService(ts.URL, nil)
+	_, err := svc.ReverseGeocode(28.6139, 77.2090)
 	if err == nil {
 		t.Error("expected error for 500, got nil")
-	}
-}
-
-func TestValidateLimit_Service(t *testing.T) {
-	tests := []struct {
-		input   string
-		want    int
-		wantErr bool
-	}{
-		{"25", 25, false},
-		{"1", 1, false},
-		{"100", 100, false},
-		{"", 50, false},
-		{"150", 0, true},
-		{"0", 0, true},
-		{"-5", 0, true},
-		{"abc", 0, true},
-	}
-
-	for _, tt := range tests {
-		got, err := validateLimit(tt.input)
-		if (err != nil) != tt.wantErr {
-			t.Errorf("validateLimit(%q) err=%v, wantErr=%v", tt.input, err, tt.wantErr)
-			continue
-		}
-		if !tt.wantErr && got != tt.want {
-			t.Errorf("validateLimit(%q) = %d, want %d", tt.input, got, tt.want)
-		}
 	}
 }

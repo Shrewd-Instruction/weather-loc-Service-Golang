@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"context"
@@ -9,17 +9,21 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"weather_loc_service/cache"
+	"weather_loc_service/logger"
+	"weather_loc_service/models"
 )
 
 type LocationService struct {
 	baseURL string
 	client  *http.Client
-	cache   *CacheService
+	cache   *cache.CacheService
 	mu      sync.Mutex
 	lastReq time.Time
 }
 
-func newLocationService(baseURL string, cache *CacheService) *LocationService {
+func NewLocationService(baseURL string, cache *cache.CacheService) *LocationService {
 	return &LocationService{
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: 10 * time.Second},
@@ -37,16 +41,16 @@ func (s *LocationService) throttle() {
 	s.lastReq = time.Now()
 }
 
-func (s *LocationService) searchLocation(query string) ([]LocationData, error) {
+func (s *LocationService) SearchLocation(query string) ([]models.LocationData, error) {
 	cacheKey := "location:search:" + query
 
 	if s.cache != nil {
 		ctx := context.Background()
 		cached, err := s.cache.Get(ctx, cacheKey)
 		if err == nil && cached != "" {
-			var data []LocationData
+			var data []models.LocationData
 			if json.Unmarshal([]byte(cached), &data) == nil {
-				log.Debug().Msgf("cache hit for %s", cacheKey)
+				logger.Log.Debug().Msgf("cache hit for %s", cacheKey)
 				return data, nil
 			}
 		}
@@ -78,15 +82,15 @@ func (s *LocationService) searchLocation(query string) ([]LocationData, error) {
 		return nil, fmt.Errorf("failed to read location response: %v", err)
 	}
 
-	var results []NominatimResult
+	var results []models.NominatimResult
 	err = json.Unmarshal(body, &results)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse location response: %v", err)
 	}
 
-	var locations []LocationData
+	var locations []models.LocationData
 	for _, r := range results {
-		locations = append(locations, LocationData{
+		locations = append(locations, models.LocationData{
 			DisplayName: r.DisplayName,
 			Latitude:    r.Lat,
 			Longitude:   r.Lon,
@@ -103,20 +107,20 @@ func (s *LocationService) searchLocation(query string) ([]LocationData, error) {
 		s.cache.Set(ctx, cacheKey, string(jsonData), 30*time.Minute)
 	}
 
-	log.Info().Msgf("searched location for '%s' from api", query)
+	logger.Log.Info().Msgf("searched location for '%s' from api", query)
 	return locations, nil
 }
 
-func (s *LocationService) reverseGeocode(lat, lon float64) (*LocationData, error) {
+func (s *LocationService) ReverseGeocode(lat, lon float64) (*models.LocationData, error) {
 	cacheKey := fmt.Sprintf("location:reverse:%.4f:%.4f", lat, lon)
 
 	if s.cache != nil {
 		ctx := context.Background()
 		cached, err := s.cache.Get(ctx, cacheKey)
 		if err == nil && cached != "" {
-			var data LocationData
+			var data models.LocationData
 			if json.Unmarshal([]byte(cached), &data) == nil {
-				log.Debug().Msgf("cache hit for %s", cacheKey)
+				logger.Log.Debug().Msgf("cache hit for %s", cacheKey)
 				return &data, nil
 			}
 		}
@@ -148,13 +152,13 @@ func (s *LocationService) reverseGeocode(lat, lon float64) (*LocationData, error
 		return nil, fmt.Errorf("failed to read reverse geocode response: %v", err)
 	}
 
-	var result NominatimResult
+	var result models.NominatimResult
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse reverse geocode response: %v", err)
 	}
 
-	data := &LocationData{
+	data := &models.LocationData{
 		DisplayName: result.DisplayName,
 		Latitude:    result.Lat,
 		Longitude:   result.Lon,
@@ -170,6 +174,6 @@ func (s *LocationService) reverseGeocode(lat, lon float64) (*LocationData, error
 		s.cache.Set(ctx, cacheKey, string(jsonData), 30*time.Minute)
 	}
 
-	log.Info().Msgf("reverse geocoded %.4f,%.4f from api", lat, lon)
+	logger.Log.Info().Msgf("reverse geocoded %.4f,%.4f from api", lat, lon)
 	return data, nil
 }

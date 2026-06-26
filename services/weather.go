@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"context"
@@ -7,6 +7,10 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"weather_loc_service/cache"
+	"weather_loc_service/logger"
+	"weather_loc_service/models"
 )
 
 var weatherCodes = map[int]string{
@@ -43,10 +47,10 @@ var weatherCodes = map[int]string{
 type WeatherService struct {
 	baseURL string
 	client  *http.Client
-	cache   *CacheService
+	cache   *cache.CacheService
 }
 
-func newWeatherService(baseURL string, cache *CacheService) *WeatherService {
+func NewWeatherService(baseURL string, cache *cache.CacheService) *WeatherService {
 	return &WeatherService{
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: 10 * time.Second},
@@ -54,16 +58,16 @@ func newWeatherService(baseURL string, cache *CacheService) *WeatherService {
 	}
 }
 
-func (s *WeatherService) getWeather(lat, lon float64) (*WeatherData, error) {
+func (s *WeatherService) GetWeather(lat, lon float64) (*models.WeatherData, error) {
 	cacheKey := fmt.Sprintf("weather:%.2f:%.2f", lat, lon)
 
 	if s.cache != nil {
 		ctx := context.Background()
 		cached, err := s.cache.Get(ctx, cacheKey)
 		if err == nil && cached != "" {
-			var data WeatherData
+			var data models.WeatherData
 			if json.Unmarshal([]byte(cached), &data) == nil {
-				log.Debug().Msgf("cache hit for %s", cacheKey)
+				logger.Log.Debug().Msgf("cache hit for %s", cacheKey)
 				return &data, nil
 			}
 		}
@@ -87,7 +91,7 @@ func (s *WeatherService) getWeather(lat, lon float64) (*WeatherData, error) {
 		return nil, fmt.Errorf("failed to read weather response: %v", err)
 	}
 
-	var raw OpenMeteoResponse
+	var raw models.OpenMeteoResponse
 	err = json.Unmarshal(body, &raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse weather response: %v", err)
@@ -98,9 +102,9 @@ func (s *WeatherService) getWeather(lat, lon float64) (*WeatherData, error) {
 		desc = "Unknown"
 	}
 
-	var forecast []DayForecast
+	var forecast []models.DayForecast
 	for i := range raw.Daily.Time {
-		f := DayForecast{Date: raw.Daily.Time[i]}
+		f := models.DayForecast{Date: raw.Daily.Time[i]}
 		if i < len(raw.Daily.Temperature2mMax) {
 			f.TempMax = raw.Daily.Temperature2mMax[i]
 		}
@@ -113,7 +117,7 @@ func (s *WeatherService) getWeather(lat, lon float64) (*WeatherData, error) {
 		forecast = append(forecast, f)
 	}
 
-	data := &WeatherData{
+	data := &models.WeatherData{
 		Latitude:      raw.Latitude,
 		Longitude:     raw.Longitude,
 		Timezone:      raw.Timezone,
@@ -135,6 +139,6 @@ func (s *WeatherService) getWeather(lat, lon float64) (*WeatherData, error) {
 		s.cache.Set(ctx, cacheKey, string(jsonData), 10*time.Minute)
 	}
 
-	log.Info().Msgf("fetched weather for %.2f,%.2f from api", lat, lon)
+	logger.Log.Info().Msgf("fetched weather for %.2f,%.2f from api", lat, lon)
 	return data, nil
 }

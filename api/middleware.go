@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"encoding/json"
@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"weather_loc_service/logger"
+	"weather_loc_service/models"
 )
 
 type wrappedWriter struct {
@@ -18,7 +21,7 @@ func (w *wrappedWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-func requestLogger(next http.Handler) http.Handler {
+func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
@@ -26,11 +29,11 @@ func requestLogger(next http.Handler) http.Handler {
 		next.ServeHTTP(wrapped, r)
 
 		duration := time.Since(start)
-		log.Info().Msgf("%s %s %d %v", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		logger.Log.Info().Msgf("%s %s %d %v", r.Method, r.URL.Path, wrapped.statusCode, duration)
 	})
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
+func CorsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -51,7 +54,7 @@ type visitor struct {
 	mu       sync.Mutex
 }
 
-func rateLimiter(maxReqs int, window time.Duration) func(http.Handler) http.Handler {
+func RateLimiter(maxReqs int, window time.Duration) func(http.Handler) http.Handler {
 	var visitors sync.Map
 
 	return func(next http.Handler) http.Handler {
@@ -74,7 +77,7 @@ func rateLimiter(maxReqs int, window time.Duration) func(http.Handler) http.Hand
 			if v.count > maxReqs {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
-				json.NewEncoder(w).Encode(APIError{
+				json.NewEncoder(w).Encode(models.APIError{
 					Code:    429,
 					Message: fmt.Sprintf("rate limit exceeded, max %d requests per %v", maxReqs, window),
 				})

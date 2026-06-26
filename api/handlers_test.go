@@ -1,20 +1,25 @@
-package main
+package api
 
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"weather_loc_service/database"
+	"weather_loc_service/logger"
+	"weather_loc_service/models"
+	"weather_loc_service/services"
 )
 
 func mockWeatherAPI() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := OpenMeteoResponse{
+		resp := models.OpenMeteoResponse{
 			Latitude:  28.61,
 			Longitude: 77.23,
 			Timezone:  "Asia/Kolkata",
 			Elevation: 216.0,
-			Current: CurrentWeather{
+			Current: models.CurrentWeather{
 				Time:                "2026-06-26T12:00",
 				Interval:            900,
 				Temperature2m:       35.2,
@@ -25,7 +30,7 @@ func mockWeatherAPI() *httptest.Server {
 				CloudCover:          30,
 				Precipitation:       0,
 			},
-			Daily: DailyWeather{
+			Daily: models.DailyWeather{
 				Time:             []string{"2026-06-26", "2026-06-27"},
 				Temperature2mMax: []float64{38.0, 39.2},
 				Temperature2mMin: []float64{28.5, 29.0},
@@ -40,7 +45,7 @@ func mockWeatherAPI() *httptest.Server {
 func mockNominatimAPI() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/reverse" {
-			resp := NominatimResult{
+			resp := models.NominatimResult{
 				PlaceID:     123456,
 				Lat:         "28.6139",
 				Lon:         "77.2090",
@@ -54,7 +59,7 @@ func mockNominatimAPI() *httptest.Server {
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
-		resp := []NominatimResult{
+		resp := []models.NominatimResult{
 			{
 				PlaceID:     123456,
 				Lat:         "28.6139",
@@ -72,12 +77,12 @@ func mockNominatimAPI() *httptest.Server {
 }
 
 func TestHandleGetWeather(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := mockWeatherAPI()
 	defer ts.Close()
 
-	wsvc := newWeatherService(ts.URL, nil)
-	handler := handleGetWeather(wsvc)
+	wsvc := services.NewWeatherService(ts.URL, nil)
+	handler := HandleGetWeather(wsvc)
 
 	req := httptest.NewRequest("GET", "/api/v1/weather?lat=28.61&lon=77.23", nil)
 	rr := httptest.NewRecorder()
@@ -88,7 +93,7 @@ func TestHandleGetWeather(t *testing.T) {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
 
-	var resp WeatherData
+	var resp models.WeatherData
 	json.NewDecoder(rr.Body).Decode(&resp)
 
 	if resp.Temperature != 35.2 {
@@ -100,12 +105,12 @@ func TestHandleGetWeather(t *testing.T) {
 }
 
 func TestHandleGetWeather_MissingParams(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := mockWeatherAPI()
 	defer ts.Close()
 
-	wsvc := newWeatherService(ts.URL, nil)
-	handler := handleGetWeather(wsvc)
+	wsvc := services.NewWeatherService(ts.URL, nil)
+	handler := HandleGetWeather(wsvc)
 
 	req := httptest.NewRequest("GET", "/api/v1/weather", nil)
 	rr := httptest.NewRecorder()
@@ -118,12 +123,12 @@ func TestHandleGetWeather_MissingParams(t *testing.T) {
 }
 
 func TestHandleGetWeather_InvalidCoords(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := mockWeatherAPI()
 	defer ts.Close()
 
-	wsvc := newWeatherService(ts.URL, nil)
-	handler := handleGetWeather(wsvc)
+	wsvc := services.NewWeatherService(ts.URL, nil)
+	handler := HandleGetWeather(wsvc)
 
 	req := httptest.NewRequest("GET", "/api/v1/weather?lat=999&lon=77.23", nil)
 	rr := httptest.NewRecorder()
@@ -136,12 +141,12 @@ func TestHandleGetWeather_InvalidCoords(t *testing.T) {
 }
 
 func TestHandleSearchLocation(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := mockNominatimAPI()
 	defer ts.Close()
 
-	lsvc := newLocationService(ts.URL, nil)
-	handler := handleSearchLocation(lsvc)
+	lsvc := services.NewLocationService(ts.URL, nil)
+	handler := HandleSearchLocation(lsvc)
 
 	req := httptest.NewRequest("GET", "/api/v1/location/search?q=Delhi", nil)
 	rr := httptest.NewRecorder()
@@ -152,7 +157,7 @@ func TestHandleSearchLocation(t *testing.T) {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
 
-	var resp []LocationData
+	var resp []models.LocationData
 	json.NewDecoder(rr.Body).Decode(&resp)
 
 	if len(resp) == 0 {
@@ -164,12 +169,12 @@ func TestHandleSearchLocation(t *testing.T) {
 }
 
 func TestHandleSearchLocation_EmptyQuery(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := mockNominatimAPI()
 	defer ts.Close()
 
-	lsvc := newLocationService(ts.URL, nil)
-	handler := handleSearchLocation(lsvc)
+	lsvc := services.NewLocationService(ts.URL, nil)
+	handler := HandleSearchLocation(lsvc)
 
 	req := httptest.NewRequest("GET", "/api/v1/location/search", nil)
 	rr := httptest.NewRecorder()
@@ -182,12 +187,12 @@ func TestHandleSearchLocation_EmptyQuery(t *testing.T) {
 }
 
 func TestHandleReverseGeocode(t *testing.T) {
-	initLogger()
+	logger.InitLogger()
 	ts := mockNominatimAPI()
 	defer ts.Close()
 
-	lsvc := newLocationService(ts.URL, nil)
-	handler := handleReverseGeocode(lsvc)
+	lsvc := services.NewLocationService(ts.URL, nil)
+	handler := HandleReverseGeocode(lsvc)
 
 	req := httptest.NewRequest("GET", "/api/v1/location/reverse?lat=28.6139&lon=77.2090", nil)
 	rr := httptest.NewRecorder()
@@ -198,7 +203,7 @@ func TestHandleReverseGeocode(t *testing.T) {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
 
-	var resp LocationData
+	var resp models.LocationData
 	json.NewDecoder(rr.Body).Decode(&resp)
 
 	if resp.DisplayName != "New Delhi, Delhi, India" {
@@ -207,9 +212,9 @@ func TestHandleReverseGeocode(t *testing.T) {
 }
 
 func TestHandleGetHistory_NoDB(t *testing.T) {
-	initLogger()
-	db = nil
-	handler := handleGetHistory()
+	logger.InitLogger()
+	database.DB = nil
+	handler := HandleGetHistory()
 
 	req := httptest.NewRequest("GET", "/api/v1/history", nil)
 	rr := httptest.NewRecorder()
@@ -222,9 +227,9 @@ func TestHandleGetHistory_NoDB(t *testing.T) {
 }
 
 func TestHandleGetStats_NoDB(t *testing.T) {
-	initLogger()
-	db = nil
-	handler := handleGetStats()
+	logger.InitLogger()
+	database.DB = nil
+	handler := HandleGetStats()
 
 	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
 	rr := httptest.NewRecorder()
@@ -256,7 +261,7 @@ func TestValidateCoordinates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := validateCoordinates(tt.lat, tt.lon)
+			_, _, err := ValidateCoordinates(tt.lat, tt.lon)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("got err=%v, wantErr=%v", err, tt.wantErr)
 			}
@@ -277,9 +282,37 @@ func TestValidateQueryParam(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := validateQueryParam(tt.input)
+		err := ValidateQueryParam(tt.input)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("validateQueryParam(%q) err=%v, wantErr=%v", tt.input, err, tt.wantErr)
+			t.Errorf("ValidateQueryParam(%q) err=%v, wantErr=%v", tt.input, err, tt.wantErr)
+		}
+	}
+}
+
+func TestValidateLimit(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{"25", 25, false},
+		{"1", 1, false},
+		{"100", 100, false},
+		{"", 50, false},
+		{"150", 0, true},
+		{"0", 0, true},
+		{"-5", 0, true},
+		{"abc", 0, true},
+	}
+
+	for _, tt := range tests {
+		got, err := ValidateLimit(tt.input)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ValidateLimit(%q) err=%v, wantErr=%v", tt.input, err, tt.wantErr)
+			continue
+		}
+		if !tt.wantErr && got != tt.want {
+			t.Errorf("ValidateLimit(%q) = %d, want %d", tt.input, got, tt.want)
 		}
 	}
 }

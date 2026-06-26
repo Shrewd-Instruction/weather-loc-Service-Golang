@@ -1,39 +1,15 @@
-package main
+package api
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
-	"time"
 
-	"github.com/rs/zerolog"
+	"weather_loc_service/models"
 )
 
-var log zerolog.Logger
-
-func initLogger() {
-	w := zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: time.RFC3339,
-	}
-
-	lvl := os.Getenv("LOG_LEVEL")
-	if lvl == "" {
-		lvl = "info"
-	}
-
-	level, err := zerolog.ParseLevel(lvl)
-	if err != nil {
-		level = zerolog.InfoLevel
-	}
-
-	zerolog.SetGlobalLevel(level)
-	log = zerolog.New(w).With().Timestamp().Logger()
-}
-
-func validateCoordinates(latStr, lonStr string) (float64, float64, error) {
+func ValidateCoordinates(latStr, lonStr string) (float64, float64, error) {
 	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid latitude value")
@@ -51,7 +27,7 @@ func validateCoordinates(latStr, lonStr string) (float64, float64, error) {
 	return lat, lon, nil
 }
 
-func validateQueryParam(q string) error {
+func ValidateQueryParam(q string) error {
 	if q == "" {
 		return fmt.Errorf("query parameter is required")
 	}
@@ -61,7 +37,7 @@ func validateQueryParam(q string) error {
 	return nil
 }
 
-func validateLimit(limitStr string) (int, error) {
+func ValidateLimit(limitStr string) (int, error) {
 	if limitStr == "" {
 		return 50, nil
 	}
@@ -75,12 +51,12 @@ func validateLimit(limitStr string) (int, error) {
 	return n, nil
 }
 
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func WriteJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, APIError{Code: status, Message: msg})
+func WriteError(w http.ResponseWriter, status int, msg string) {
+	WriteJSON(w, status, models.APIError{Code: status, Message: msg})
 }
