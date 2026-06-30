@@ -6,9 +6,9 @@ docker:
 
 docker compose up --build -d
 
-docker cp setup.sql weather_loc_service-mssql-1:/tmp/setup.sql
+docker cp setup.sql weather-loc-services-golang-mssql-1:/tmp/setup.sql
 
-docker exec weather_loc_service-mssql-1 \
+docker exec weather-loc-services-golang-mssql-1 \
  /opt/mssql-tools18/bin/sqlcmd \
  -S localhost \
  -U sa \
