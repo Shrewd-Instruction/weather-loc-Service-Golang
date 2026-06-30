@@ -14,11 +14,17 @@ without docker:
 go run .
 
 api info:
+
 GET http://localhost:8080/api/v1/health
 
-postman exaplles:
+postman:
+
 GET http://localhost:8080/api/v1/weather/Delhi
+
 GET http://localhost:8080/api/v1/weather?lat=28.61&lon=77.23
+
 GET http://localhost:8080/api/v1/location/search?q=Mumbai
+
 GET http://localhost:8080/api/v1/insights?city=Bangalore
+
 GET http://localhost:8080/api/v1/history?limit=10
